@@ -288,16 +288,34 @@ def _run_hotkey_stt(
     return 0
 
 
+def _start_noise_filter() -> None:
+    import subprocess
+    subprocess.run(
+        ["systemctl", "--user", "start", "filter-chain.service"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
+def _stop_noise_filter() -> None:
+    import subprocess
+    subprocess.run(
+        ["systemctl", "--user", "stop", "filter-chain.service"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
 def _run_dictate(
     client: LlamaSwapAudioClient,
     chunk_seconds: float,
     model: str | None,
     language: str | None,
 ) -> int:
+    _start_noise_filter()
     session = ChunkedSTTSession(client, model=model, language=language, chunk_seconds=chunk_seconds)
 
     def _shutdown(signum, frame):  # noqa: ARG001
         session.stop()
+        _stop_noise_filter()
         PIDFILE.unlink(missing_ok=True)
         raise SystemExit(0)
 
@@ -310,6 +328,7 @@ def _run_dictate(
         # Block until signaled
         signal.pause()
     finally:
+        _stop_noise_filter()
         PIDFILE.unlink(missing_ok=True)
     return 0
 

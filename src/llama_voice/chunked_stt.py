@@ -101,6 +101,7 @@ class ChunkedSTTSession:
                     chunk_path.unlink(missing_ok=True)
                     continue
 
+                text = text.replace("\n", " ").strip()
                 if text and text.strip().lower() not in HALLUCINATIONS:
                     typed = type_into_active_app(text + " ")
                     log.debug("Typed=%s text=%r", typed, text)
