@@ -26,6 +26,8 @@ llama-voice listen --hotkey f8 --copy
 
 ```bash
 llama-voice "output text to here to talk"
+# or
+llama-voice tts "output text to here to talk"
 ```
 
 ## Defaults
@@ -33,6 +35,17 @@ llama-voice "output text to here to talk"
 - STT model: `whisper-large-v3-turbo`
 - TTS model: `kokoro-82m`
 - TTS voice: `af_sky`
+
+## Streaming note
+
+- TTS supports streaming at API level (`/v1/audio/speech` with `"stream": true`).
+- CLI writes returned audio to WAV then plays it.
+- STT endpoint is `/v1/audio/transcriptions`.
+
+## Runtime note
+
+- Hotkey mode requires an active desktop session (X11/Wayland).
+- `tts` and `stt-file` can run in headless sessions.
 
 ## Override models
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import signal
 import subprocess
@@ -108,4 +109,100 @@ def copy_to_clipboard(text: str) -> bool:
     if shutil.which("pbcopy"):
         subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=True)
         return True
+    return False
+
+
+def _type_with_xdotool(text: str) -> bool:
+    xdotool = shutil.which("xdotool")
+    if not xdotool:
+        return False
+
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+    for idx, line in enumerate(lines):
+        if line:
+            r = subprocess.run(
+                [xdotool, "type", "--clearmodifiers", "--delay", "1", line],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if r.returncode != 0:
+                return False
+        if idx < len(lines) - 1:
+            subprocess.run(
+                [xdotool, "key", "--clearmodifiers", "Return"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    return True
+
+
+def _type_with_wtype(text: str) -> bool:
+    wtype = shutil.which("wtype")
+    if not wtype:
+        return False
+
+    result = subprocess.run([wtype, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return result.returncode == 0
+
+
+def _applescript_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _type_with_osascript(text: str) -> bool:
+    osascript = shutil.which("osascript")
+    if not osascript:
+        return False
+
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.split("\n")
+    cmd = [osascript, "-e", 'tell application "System Events"']
+    for idx, line in enumerate(lines):
+        escaped = _applescript_escape(line)
+        cmd.extend(["-e", f'keystroke "{escaped}"'])
+        if idx < len(lines) - 1:
+            cmd.extend(["-e", "key code 36"])
+    cmd.extend(["-e", "end tell"])
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def _type_with_ydotool(text: str) -> bool:
+    ydotool = shutil.which("ydotool")
+    # Also check common user-local path if not on PATH
+    if not ydotool:
+        candidate = Path.home() / ".local" / "bin" / "ydotool"
+        if candidate.exists():
+            ydotool = str(candidate)
+    if not ydotool:
+        return False
+
+    env = {**os.environ}
+    env["YDOTOOL_SOCKET"] = str(Path.home() / ".ydotool_socket")
+
+    result = subprocess.run(
+        [ydotool, "type", "--key-delay", "0", text],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+    if result.returncode != 0:
+        import logging
+        logging.getLogger("llama_voice.audio").error(
+            "ydotool failed (rc=%d): %s", result.returncode, result.stderr.decode(errors="replace"),
+        )
+    return result.returncode == 0
+
+
+def type_into_active_app(text: str) -> bool:
+    if not text:
+        return False
+
+    if sys.platform.startswith("linux"):
+        return _type_with_ydotool(text) or _type_with_wtype(text) or _type_with_xdotool(text)
+
+    if sys.platform == "darwin":
+        return _type_with_osascript(text)
+
     return False
