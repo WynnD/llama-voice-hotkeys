@@ -11,13 +11,13 @@ Built for speed + quality with default models:
 Default host is mapped to your llama-swap machine:
 - `http://192.168.0.101:8080`
 
-## Install
+## Install with uv
 
 ```bash
 cd ~/projects/llama-voice-hotkeys
-python3 -m venv .venv
+uv venv --clear .venv
 source .venv/bin/activate
-pip install -e .
+uv pip install -e '.[dev]'
 ```
 
 ## Laptop pairing (one-time)
