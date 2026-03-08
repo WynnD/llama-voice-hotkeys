@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llama-voice"
+version = "0.1.0"
+description = "Hotkey STT + fast TTS CLI for local llama-swap services"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Wynn" }]
+dependencies = [
+  "requests>=2.32.0",
+  "pynput>=1.7.7"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+llama-voice = "llama_voice.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
