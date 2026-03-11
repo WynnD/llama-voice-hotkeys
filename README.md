@@ -46,6 +46,32 @@ llama-voice tts "output text to here to talk"
 ### Start hotkey transcription (STT)
 
 ```bash
+llama-voice listen --hotkey f8
+```
+
+Behavior:
+- Press `F8` once: start recording
+- Press `F8` again: stop + type into active app
+- Press `Esc`: quit
+
+If you bind this to a GNOME shortcut, the command should be `llama-voice listen ...` and the GNOME shortcut key should be different from the internal `--hotkey` value.
+
+For a true one-key workflow in GNOME, use:
+
+```bash
+# Toggle background dictate (start/stop stream typing)
+llama-voice toggle
+```
+
+Recommended GNOME setup (run this in your GNOME session):
+
+```bash
+./scripts/setup_gnome_voice_hotkey.sh '<Primary><Alt>space>'
+```
+
+### Start hotkey transcription (copy mode)
+
+```bash
 llama-voice listen --hotkey f8 --copy
 ```
 
@@ -53,7 +79,7 @@ Behavior:
 - Press `F8` once: start recording
 - Press `F8` again: stop + transcribe
 - Press `Esc`: quit
-- `--copy` copies transcript to clipboard
+- `--copy` copies transcript to clipboard and does not type into the app
 
 ### Transcribe a WAV file
 
@@ -160,4 +186,7 @@ llama-voice "meeting starts in 5 minutes"
 
 # Dictate text with hotkey
 llama-voice listen --hotkey f8 --copy
+
+# GNOME-friendly one-key setup
+llama-voice toggle
 ```

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import queue
 import os
 import shutil
 import subprocess
@@ -11,7 +12,13 @@ import threading
 import time
 from pathlib import Path
 
-from .audio import AudioToolError, start_recording_ffmpeg, stop_recording_ffmpeg, type_into_active_app
+from .audio import (
+    AudioToolError,
+    copy_to_clipboard,
+    start_recording_ffmpeg,
+    stop_recording_ffmpeg,
+    type_into_active_app,
+)
 from .client import LlamaSwapAudioClient
 
 # Common whisper hallucinations on silence
@@ -59,21 +66,27 @@ class ChunkedSTTSession:
         self.chunk_seconds = chunk_seconds
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._transcription_thread: threading.Thread | None = None
+        self._chunk_queue: queue.Queue[Path | None] = queue.Queue()
 
     def start(self) -> None:
-        # Ensure ydotool can find its socket when spawned from GNOME
-        os.environ.setdefault("YDOTOOL_SOCKET", str(Path.home() / ".ydotool_socket"))
         log.info("Dictation starting (chunk=%.1fs)", self.chunk_seconds)
         send_notification("Listening...", "Speak now")
         print("Recording — speak now. Press hotkey again to stop.")
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
+        self._transcription_thread = threading.Thread(target=self._transcription_loop, daemon=True)
+        self._transcription_thread.start()
 
     def stop(self) -> None:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=30)
+        # Drain remaining chunk transcriptions
+        self._chunk_queue.put(None)
+        if self._transcription_thread:
+            self._transcription_thread.join(timeout=30)
         send_notification("Done", "Dictation complete")
         print("\nDictation complete.")
 
@@ -93,24 +106,49 @@ class ChunkedSTTSession:
             stop_recording_ffmpeg(proc)
 
             if chunk_path.exists() and chunk_path.stat().st_size > 44:
-                try:
-                    text = self.client.transcribe(chunk_path, model=self.model, language=self.language)
-                    log.debug("Transcribed: %r", text)
-                except Exception as exc:  # noqa: BLE001
-                    log.error("Transcription error: %s", exc)
-                    chunk_path.unlink(missing_ok=True)
-                    continue
-
-                text = text.replace("\n", " ").strip()
-                if text and text.strip().lower() not in HALLUCINATIONS:
-                    typed = type_into_active_app(text + " ")
-                    log.debug("Typed=%s text=%r", typed, text)
-                    if not typed:
-                        print(text, end=" ", flush=True)
-                elif text:
-                    log.debug("Filtered hallucination: %r", text)
+                self._chunk_queue.put(chunk_path)
             else:
                 log.debug("Chunk too small, skipping: %s", chunk_path)
+                chunk_path.unlink(missing_ok=True)
+        log.info("Run loop exiting")
+
+    def _transcription_loop(self) -> None:
+        while True:
+            chunk_path = self._chunk_queue.get()
+            if chunk_path is None:
+                break
+
+            if not chunk_path.exists() or chunk_path.stat().st_size <= 44:
+                log.debug("Chunk too small or missing on transcribe: %s", chunk_path)
+                chunk_path.unlink(missing_ok=True)
+                self._chunk_queue.task_done()
+                continue
+
+            try:
+                text = self.client.transcribe(chunk_path, model=self.model, language=self.language)
+                log.debug("Transcribed: %r", text)
+            except Exception as exc:  # noqa: BLE001
+                log.error("Transcription error: %s", exc)
+                chunk_path.unlink(missing_ok=True)
+                self._chunk_queue.task_done()
+                continue
+
+            text = text.replace("\n", " ").strip()
+            if text and text.strip().lower() not in HALLUCINATIONS:
+                try:
+                    typed = type_into_active_app(text + " ")
+                except Exception as exc:  # noqa: BLE001
+                    log.error("Typing backend error: %s", exc)
+                    typed = False
+                log.debug("Typed=%s text=%r", typed, text)
+                if not typed:
+                    copied = copy_to_clipboard(text)
+                    print(text, end=" ", flush=True)
+                    if copied:
+                        print("(copied)", end=" ", flush=True)
+            elif text:
+                log.debug("Filtered hallucination: %r", text)
 
             chunk_path.unlink(missing_ok=True)
-        log.info("Run loop exiting")
+            self._chunk_queue.task_done()
+        log.info("Transcription loop exiting")

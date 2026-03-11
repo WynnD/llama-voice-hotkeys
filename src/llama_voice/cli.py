@@ -15,6 +15,22 @@ from .config import USER_CONFIG_PATH, load_config, save_user_config
 
 SUBCOMMANDS = {"tts", "listen", "stt-file", "pair-laptop", "dictate", "toggle"}
 PIDFILE = Path(tempfile.gettempdir()) / "llama-voice-dictate.pid"
+HOTKEY_TOKEN_ALIASES = {
+    "alt": "<alt>",
+    "alt_l": "<alt_l>",
+    "alt_r": "<alt_r>",
+    "altgr": "<alt_gr>",
+    "cmd": "<cmd>",
+    "ctrl": "<ctrl>",
+    "control": "<ctrl>",
+    "esc": "<esc>",
+    "escape": "<esc>",
+    "meta": "<cmd>",
+    "shift": "<shift>",
+    "space": "<space>",
+    "super": "<cmd>",
+    "win": "<cmd>",
+}
 
 
 def _build_parser() -> argparse.ArgumentParser:
