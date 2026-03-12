@@ -63,7 +63,7 @@ add_gnome_shortcut "llama-voice-read-selection" "Read Selection Aloud" \
 add_gnome_shortcut "llama-voice-stop-tts" "Stop TTS" \
   "$SCRIPT_DIR/stop-tts.sh" "$STOP_HOTKEY"
 
-# --- 3. Claude Code Stop hook ---
+# --- 4. Claude Code Stop hook ---
 
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 
