@@ -2,9 +2,6 @@
 # Read highlighted text aloud via TTS (bind to a global hotkey)
 set -euo pipefail
 
-# Skip if TTS is toggled off
-[ -f "$HOME/.config/llama-voice/tts-disabled" ] && exit 0
-
 # Kill any running TTS audio playback
 pkill -f 'ffplay.*-nodisp.*-autoexit' 2>/dev/null || true
 
