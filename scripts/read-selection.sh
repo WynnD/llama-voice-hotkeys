@@ -17,6 +17,9 @@ if [ ${#TEXT} -gt 5000 ]; then
   TEXT="${TEXT:0:5000}..."
 fi
 
+# Ensure newlines become sentence breaks so TTS pauses naturally
+TEXT=$(echo "$TEXT" | sed -E '/^$/d' | sed -E 's/([^.!?])$/\1./' | tr '\n' ' ')
+
 # Space out ticket IDs (e.g. BEA-543 → B E A 5 4 3) so TTS reads them clearly
 TEXT=$(echo "$TEXT" | sed -E 's/\b([A-Z]{1,3})-([0-9]{1,5})\b/\1 \2/g' | sed -E 's/\b([A-Z])([A-Z])([A-Z])\b/\1 \2 \3/g; s/\b([A-Z])([A-Z])\b/\1 \2/g' | sed -E 's/([A-Z]) ([0-9])([0-9])([0-9])([0-9])([0-9])\b/\1 \2 \3 \4 \5 \6/g; s/([A-Z]) ([0-9])([0-9])([0-9])([0-9])\b/\1 \2 \3 \4 \5/g; s/([A-Z]) ([0-9])([0-9])([0-9])\b/\1 \2 \3 \4/g; s/([A-Z]) ([0-9])([0-9])\b/\1 \2 \3/g')
 
