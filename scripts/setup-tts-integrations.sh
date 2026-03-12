@@ -1,46 +1,39 @@
 #!/usr/bin/env bash
 # Sets up:
 #   1. GNOME hotkey (Ctrl+Shift+R) to read highlighted text aloud
-#   2. Claude Code Stop hook to speak assistant responses
+#   2. GNOME hotkey (Ctrl+Shift+Q) to stop TTS playback
+#   3. Claude Code Stop hook to speak assistant responses
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOTKEY="${1:-<Primary><Shift>r}"
+READ_HOTKEY="${1:-<Primary><Shift>r}"
+STOP_HOTKEY="${2:-<Primary><Shift>q}"
 
 # --- Prerequisites ---
 
-if ! command -v gsettings >/dev/null 2>&1; then
-  echo "gsettings is required (GNOME session)." >&2
-  exit 1
-fi
+for cmd in gsettings jq wl-paste python3; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "$cmd is required." >&2
+    exit 1
+  fi
+done
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "jq is required." >&2
-  exit 1
-fi
-
-if ! command -v wl-paste >/dev/null 2>&1; then
-  echo "wl-clipboard is required (wl-paste)." >&2
-  exit 1
-fi
-
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required." >&2
-  exit 1
-fi
-
-# --- 1. GNOME read-selection hotkey ---
+# --- Helper: register a GNOME custom shortcut idempotently ---
 
 SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
 CUSTOM_SCHEMA="org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
-CUSTOM_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/llama-voice-read-selection/"
 
-CURRENT="$(gsettings get "$SCHEMA" custom-keybindings)"
-# ast.literal_eval is safe — it only parses Python literals, no code execution
-UPDATED="$(printf '%s' "$CURRENT" | python3 - "$CUSTOM_PATH" <<'PY'
+add_gnome_shortcut() {
+  local slug="$1" name="$2" command="$3" binding="$4"
+  local custom_path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/${slug}/"
+
+  # ast.literal_eval is safe — it only parses Python literals, no code execution
+  local current updated
+  current="$(gsettings get "$SCHEMA" custom-keybindings)"
+  updated="$(echo "$current" | python3 -c "
 import ast, sys
 raw = sys.stdin.read().strip()
-path = sys.argv[1]
+path = '$custom_path'
 try:
     items = ast.literal_eval(raw)
 except Exception:
@@ -50,19 +43,27 @@ if not isinstance(items, list):
 if path not in items:
     items.append(path)
 print(items)
-PY
-)"
+")"
 
-gsettings set "$SCHEMA" custom-keybindings "$UPDATED"
-gsettings set "$CUSTOM_SCHEMA:$CUSTOM_PATH" name "Read Selection Aloud"
-gsettings set "$CUSTOM_SCHEMA:$CUSTOM_PATH" command "$SCRIPT_DIR/read-selection.sh"
-gsettings set "$CUSTOM_SCHEMA:$CUSTOM_PATH" binding "$HOTKEY"
+  gsettings set "$SCHEMA" custom-keybindings "$updated"
+  gsettings set "$CUSTOM_SCHEMA:$custom_path" name "$name"
+  gsettings set "$CUSTOM_SCHEMA:$custom_path" command "$command"
+  gsettings set "$CUSTOM_SCHEMA:$custom_path" binding "$binding"
 
-echo "GNOME shortcut configured:"
-echo "  binding: $HOTKEY"
-echo "  command: $SCRIPT_DIR/read-selection.sh"
+  echo "GNOME shortcut: $name ($binding)"
+}
 
-# --- 2. Claude Code Stop hook ---
+# --- 1. Read-selection hotkey ---
+
+add_gnome_shortcut "llama-voice-read-selection" "Read Selection Aloud" \
+  "$SCRIPT_DIR/read-selection.sh" "$READ_HOTKEY"
+
+# --- 2. Stop TTS hotkey ---
+
+add_gnome_shortcut "llama-voice-stop-tts" "Stop TTS" \
+  "$SCRIPT_DIR/stop-tts.sh" "$STOP_HOTKEY"
+
+# --- 3. Claude Code Stop hook ---
 
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 
@@ -93,5 +94,7 @@ else
 fi
 
 echo ""
-echo "Done! Highlight text and press $HOTKEY to read it aloud."
-echo "Claude Code will speak responses automatically."
+echo "Done!"
+echo "  Ctrl+Shift+R  Read highlighted text aloud"
+echo "  Ctrl+Shift+Q  Stop TTS playback"
+echo "  Claude Code   Speaks responses automatically"
