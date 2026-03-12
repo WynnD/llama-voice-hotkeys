@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .audio import AudioToolError, copy_to_clipboard, play_wav, start_recording_ffmpeg, stop_recording_ffmpeg
+from .audio import AudioToolError, copy_to_clipboard, play_wav, play_wav_stream, start_recording_ffmpeg, stop_recording_ffmpeg
 from .chunked_stt import ChunkedSTTSession, send_notification
 from .client import LlamaSwapAudioClient
 from .config import USER_CONFIG_PATH, load_config, save_user_config
@@ -151,6 +151,12 @@ def _run_tts(
     output: str | None,
     no_play: bool,
 ) -> int:
+    # Stream directly to ffplay when no file output is needed
+    if not output and not no_play:
+        chunks = client.synthesize_stream(text=text, voice=voice, model=model, speed=speed)
+        play_wav_stream(chunks)
+        return 0
+
     out_path = (
         Path(output)
         if output

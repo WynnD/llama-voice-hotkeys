@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import requests
@@ -71,3 +72,34 @@ class LlamaSwapAudioClient:
         response.raise_for_status()
         output_wav.write_bytes(response.content)
         return output_wav
+
+    def synthesize_stream(
+        self,
+        text: str,
+        model: str | None = None,
+        voice: str | None = None,
+        speed: float = 1.0,
+        chunk_size: int = 4096,
+    ) -> Iterator[bytes]:
+        if not text.strip():
+            raise ValueError("TTS text is empty")
+
+        url = f"{self.config.base_url}/audio/speech"
+        payload = {
+            "model": model or self.config.tts_model,
+            "voice": voice or self.config.tts_voice,
+            "input": text,
+            "response_format": "wav",
+            "speed": speed,
+            "stream": True,
+        }
+
+        response = requests.post(
+            url,
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json=payload,
+            stream=True,
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        yield from response.iter_content(chunk_size=chunk_size)

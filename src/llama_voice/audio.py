@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -100,6 +101,31 @@ def play_wav(wav_path: Path) -> None:
         return
 
     raise AudioToolError("No playback binary found (ffplay/aplay/afplay)")
+
+
+def play_wav_stream(chunks: Iterable[bytes]) -> None:
+    ffplay = shutil.which("ffplay")
+    if not ffplay:
+        raise AudioToolError("Streaming playback requires ffplay")
+
+    proc = subprocess.Popen(
+        [ffplay, "-nodisp", "-autoexit", "-loglevel", "error", "-i", "pipe:0"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        for chunk in chunks:
+            if chunk:
+                proc.stdin.write(chunk)
+        proc.stdin.close()
+        proc.wait()
+    except BrokenPipeError:
+        pass  # ffplay was killed (e.g. Ctrl+Shift+Q)
+    finally:
+        if proc.stdin and not proc.stdin.closed:
+            proc.stdin.close()
+        proc.wait()
 
 
 def copy_to_clipboard(text: str) -> bool:
